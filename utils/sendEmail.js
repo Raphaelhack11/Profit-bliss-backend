@@ -5,17 +5,30 @@ dotenv.config();
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
+    user: process.env.EMAIL_USER,       // your Gmail
+    pass: process.env.EMAIL_PASS,       // app password
+  },
 });
 
-export async function sendVerificationEmail(userEmail, token) {
-  const link = `${process.env.FRONTEND_URL}/verify?token=${token}`;
-  await transporter.sendMail({
-    from: process.env.EMAIL_USER,
-    to: userEmail,
-    subject: "Verify your account",
-    html: `<p>Please verify your account by clicking <a href="${link}">here</a>.</p>`
-  });
+/**
+ * Send an email
+ * @param {string} to - Recipient email
+ * @param {string} subject - Email subject
+ * @param {string} text - Email text content
+ */
+async function sendEmail(to, subject, text) {
+  try {
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to,
+      subject,
+      text,
+    });
+    console.log(`📧 Email sent to ${to}`);
+  } catch (err) {
+    console.error("❌ Error sending email:", err);
+    throw err;
+  }
 }
+
+export default sendEmail;  // ✅ now default export
