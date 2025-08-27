@@ -1,51 +1,43 @@
 import express from "express";
 import db from "../db.js";
-import { authMiddleware } from "../middleware/authMiddleware.js";
+import { hashPassword, comparePassword } from "../utils/hash.js";
+import { generateToken } from "../utils/jwt.js";
+import { sendEmail } from "../utils/email.js";
 
 const router = express.Router();
 
-// Deposit Request (pending until admin approves)
-router.post("/deposit", authMiddleware, async (req, res) => {
-  const { amount } = req.body;
+// Signup
+router.post("/signup", async (req, res) => {
+  const { email, password } = req.body;
   try {
+    const hashed = await hashPassword(password);
     await db.execute({
-      sql: "INSERT INTO transactions (userId, type, amount, status) VALUES (?, ?, ?, 'pending')",
-      args: [req.user.id, "deposit", amount],
+      sql: "INSERT INTO users (email, password) VALUES (?, ?)",
+      args: [email, hashed]
     });
-    res.json({ message: "Deposit request submitted" });
+
+    await sendEmail(email, "Welcome to Profit Bliss", "Your account has been created!");
+    res.json({ message: "Signup successful" });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Deposit failed" });
+    res.status(400).json({ error: "User already exists" });
   }
 });
 
-// Withdraw Request (pending until admin approves)
-router.post("/withdraw", authMiddleware, async (req, res) => {
-  const { amount } = req.body;
-  try {
-    await db.execute({
-      sql: "INSERT INTO transactions (userId, type, amount, status) VALUES (?, ?, ?, 'pending')",
-      args: [req.user.id, "withdraw", amount],
-    });
-    res.json({ message: "Withdrawal request submitted" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Withdrawal failed" });
-  }
-});
+// Login
+router.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+  const result = await db.execute({
+    sql: "SELECT * FROM users WHERE email = ?",
+    args: [email]
+  });
+  const user = result.rows[0];
+  if (!user) return res.status(400).json({ error: "Invalid credentials" });
 
-// Get user transactions
-router.get("/history", authMiddleware, async (req, res) => {
-  try {
-    const result = await db.execute({
-      sql: "SELECT * FROM transactions WHERE userId = ? ORDER BY createdAt DESC",
-      args: [req.user.id],
-    });
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to fetch history" });
-  }
+  const match = await comparePassword(password, user.password);
+  if (!match) return res.status(400).json({ error: "Invalid credentials" });
+
+  const token = generateToken(user);
+  res.json({ token, user });
 });
 
 export default router;
