@@ -1,52 +1,36 @@
+// server.js
 import express from "express";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
-import db from "../db.js";
-import sendEmail from "../utils/sendEmail.js";
+import cors from "cors";
+import dotenv from "dotenv";
+import { initDB } from "./db.js"; // ✅ Correct import (same folder)
 
-const router = express.Router();
+import authRoutes from "./routes/auth.js";
+import withdrawRoutes from "./routes/withdraw.js";
+import historyRoutes from "./routes/history.js";
 
-// Register
-router.post("/register", async (req, res) => {
-  const { email, password } = req.body;
-  try {
-    const hashed = await bcrypt.hash(password, 10);
-    await db.execute({
-      sql: "INSERT INTO users (email, password) VALUES (?, ?)",
-      args: [email, hashed],
-    });
+dotenv.config();
 
-    await sendEmail(email, "Welcome!", "Your account has been created successfully.");
-    res.json({ message: "✅ User registered successfully" });
-  } catch (err) {
-    res.status(400).json({ error: "User already exists or invalid input" });
-  }
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Middlewares
+app.use(cors());
+app.use(express.json());
+
+// Initialize database
+await initDB();
+
+// Routes
+app.use("/api/auth", authRoutes);
+app.use("/api/withdraw", withdrawRoutes);
+app.use("/api/history", historyRoutes);
+
+// Default route
+app.get("/", (req, res) => {
+  res.send("🚀 Profit Bliss Backend is running...");
 });
 
-// Login
-router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-  try {
-    const result = await db.execute({
-      sql: "SELECT * FROM users WHERE email = ?",
-      args: [email],
-    });
-    const user = result.rows[0];
-    if (!user) return res.status(400).json({ error: "Invalid credentials" });
-
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) return res.status(400).json({ error: "Invalid credentials" });
-
-    const token = jwt.sign(
-      { id: user.id, isAdmin: user.isAdmin },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    res.json({ token });
-  } catch (err) {
-    res.status(500).json({ error: "Login failed" });
-  }
+// Start server
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
 });
-
-export default router;
