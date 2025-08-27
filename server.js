@@ -1,29 +1,52 @@
 import express from "express";
-import cors from "cors";
-import dotenv from "dotenv";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import db from "../db.js";
+import sendEmail from "../utils/sendEmail.js";
 
-import authRoutes from "./routes/auth.js";
-import depositRoutes from "./routes/deposit.js";
-import withdrawRoutes from "./routes/withdraw.js";
-import historyRoutes from "./routes/history.js";
-import adminRoutes from "./routes/admin.js";
+const router = express.Router();
 
-dotenv.config();
-const app = express();
+// Register
+router.post("/register", async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const hashed = await bcrypt.hash(password, 10);
+    await db.execute({
+      sql: "INSERT INTO users (email, password) VALUES (?, ?)",
+      args: [email, hashed],
+    });
 
-app.use(express.json());
+    await sendEmail(email, "Welcome!", "Your account has been created successfully.");
+    res.json({ message: "✅ User registered successfully" });
+  } catch (err) {
+    res.status(400).json({ error: "User already exists or invalid input" });
+  }
+});
 
-// ✅ Use FRONTEND_URL for stricter security
-app.use(cors({
-  origin: process.env.FRONTEND_URL,
-  credentials: true
-}));
+// Login
+router.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const result = await db.execute({
+      sql: "SELECT * FROM users WHERE email = ?",
+      args: [email],
+    });
+    const user = result.rows[0];
+    if (!user) return res.status(400).json({ error: "Invalid credentials" });
 
-app.use("/api/auth", authRoutes);
-app.use("/api/deposit", depositRoutes);
-app.use("/api/withdraw", withdrawRoutes);
-app.use("/api/history", historyRoutes);
-app.use("/api/admin", adminRoutes);
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) return res.status(400).json({ error: "Invalid credentials" });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+    const token = jwt.sign(
+      { id: user.id, isAdmin: user.isAdmin },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.json({ token });
+  } catch (err) {
+    res.status(500).json({ error: "Login failed" });
+  }
+});
+
+export default router;
