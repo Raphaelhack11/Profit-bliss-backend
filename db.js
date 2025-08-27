@@ -7,7 +7,7 @@ const db = createClient({
   authToken: process.env.DATABASE_AUTH_TOKEN
 });
 
-// Ensure tables exist
+// Create tables if not exist
 await db.execute(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
