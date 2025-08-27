@@ -1,27 +1,56 @@
 import express from "express";
-import { db } from "../db.js";
+import db from "../db.js";
+import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
 // Approve transaction
-router.post("/approve", async (req, res) => {
-  const { id, status } = req.body;
-  const txResult = await db.execute("SELECT * FROM transactions WHERE id=?", [id]);
-  const tx = txResult.rows[0];
+router.post("/approve/:id", authMiddleware, async (req, res) => {
+  if (!req.user.isAdmin) return res.status(403).json({ message: "Unauthorized" });
 
-  if (!tx) return res.status(404).json({ error: "Transaction not found" });
+  try {
+    const { id } = req.params;
+    const result = await db.execute({ sql: "SELECT * FROM transactions WHERE id = ?", args: [id] });
+    const tx = result.rows[0];
 
-  if (status === "approved" && tx.type === "deposit") {
-    await db.execute("UPDATE users SET balance = balance + ? WHERE id=?", [tx.amount, tx.userId]);
+    if (!tx) return res.status(404).json({ message: "Transaction not found" });
+
+    // Update user balance
+    if (tx.type === "deposit") {
+      await db.execute({
+        sql: "UPDATE users SET balance = balance + ? WHERE id = ?",
+        args: [tx.amount, tx.userId],
+      });
+    } else if (tx.type === "withdraw") {
+      await db.execute({
+        sql: "UPDATE users SET balance = balance - ? WHERE id = ?",
+        args: [tx.amount, tx.userId],
+      });
+    }
+
+    // Mark transaction approved
+    await db.execute({ sql: "UPDATE transactions SET status = 'approved' WHERE id = ?", args: [id] });
+
+    res.json({ message: "Transaction approved" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Approval failed" });
   }
+});
 
-  if (status === "approved" && tx.type === "withdraw") {
-    await db.execute("UPDATE users SET balance = balance - ? WHERE id=?", [tx.amount, tx.userId]);
+// Get all pending transactions
+router.get("/pending", authMiddleware, async (req, res) => {
+  if (!req.user.isAdmin) return res.status(403).json({ message: "Unauthorized" });
+
+  try {
+    const result = await db.execute({
+      sql: "SELECT * FROM transactions WHERE status = 'pending'",
+    });
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch pending transactions" });
   }
-
-  await db.execute("UPDATE transactions SET status=? WHERE id=?", [status, id]);
-
-  res.json({ message: `Transaction ${status}` });
 });
 
 export default router;
