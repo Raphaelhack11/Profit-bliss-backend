@@ -8,7 +8,7 @@ router.get("/:userId", async (req, res) => {
   try {
     const result = await db.execute({
       sql: "SELECT * FROM transactions WHERE userId = ? ORDER BY createdAt DESC",
-      args: [userId]
+      args: [userId],
     });
     res.json(result.rows);
   } catch (err) {
