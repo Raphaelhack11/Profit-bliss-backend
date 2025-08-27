@@ -1,32 +1,41 @@
-import { createClient } from "@turso/db";
+import { createClient } from "@libsql/client";
 import dotenv from "dotenv";
 dotenv.config();
 
-export const db = createClient({
+const db = createClient({
   url: process.env.TURSO_DATABASE_URL,
-  authToken: process.env.TURSO_AUTH_TOKEN
+  authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
-// Create tables if not exist
-await db.execute(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT,
-    email TEXT UNIQUE,
-    password TEXT,
-    isVerified INTEGER DEFAULT 0,
-    balance REAL DEFAULT 0
-  );
-`);
+// ✅ Initialize tables if not exist
+(async () => {
+  try {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE,
+        password TEXT,
+        verified INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
 
-await db.execute(`
-  CREATE TABLE IF NOT EXISTS transactions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    userId INTEGER,
-    type TEXT,
-    amount REAL,
-    status TEXT DEFAULT 'pending',
-    createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(userId) REFERENCES users(id)
-  );
-`);
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        type TEXT, -- 'deposit' | 'withdrawal'
+        amount REAL,
+        status TEXT DEFAULT 'pending', -- 'pending' | 'confirmed'
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+      );
+    `);
+
+    console.log("✅ Database initialized");
+  } catch (err) {
+    console.error("❌ DB init error:", err);
+  }
+})();
+
+export default db;
