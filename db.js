@@ -5,10 +5,11 @@ dotenv.config();
 const db = createClient({
   url: process.env.DATABASE_URL,
   authToken: process.env.DATABASE_AUTH_TOKEN,
+  syncUrl: null // 🚫 disables migration sync (fix for 400 error)
 });
 
-// ✅ Initialize tables safely
 export async function initDB() {
+  // Ensure users & transactions tables exist
   await db.execute(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -29,8 +30,6 @@ export async function initDB() {
       createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
-
-  console.log("✅ Database initialized");
 }
 
 export default db;
