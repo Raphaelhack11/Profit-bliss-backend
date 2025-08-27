@@ -1,38 +1,50 @@
-// routes/auth.js
 import express from "express";
-import db from "../db.js";   // ✅ notice no curly braces now
+import db from "../db.js";
+import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// Example: user signup
-router.post("/signup", (req, res) => {
-  const { email, password } = req.body;
-
+// Deposit Request (pending until admin approves)
+router.post("/deposit", authMiddleware, async (req, res) => {
+  const { amount } = req.body;
   try {
-    const stmt = db.prepare("INSERT INTO users (email, password) VALUES (?, ?)");
-    stmt.run(email, password);
-
-    res.status(201).json({ message: "User registered successfully" });
+    await db.execute({
+      sql: "INSERT INTO transactions (userId, type, amount, status) VALUES (?, ?, ?, 'pending')",
+      args: [req.user.id, "deposit", amount],
+    });
+    res.json({ message: "Deposit request submitted" });
   } catch (err) {
-    res.status(400).json({ error: "User already exists or DB error" });
+    console.error(err);
+    res.status(500).json({ message: "Deposit failed" });
   }
 });
 
-// Example: user login
-router.post("/login", (req, res) => {
-  const { email, password } = req.body;
-
+// Withdraw Request (pending until admin approves)
+router.post("/withdraw", authMiddleware, async (req, res) => {
+  const { amount } = req.body;
   try {
-    const stmt = db.prepare("SELECT * FROM users WHERE email = ? AND password = ?");
-    const user = stmt.get(email, password);
-
-    if (user) {
-      res.json({ message: "Login successful", user });
-    } else {
-      res.status(401).json({ error: "Invalid credentials" });
-    }
+    await db.execute({
+      sql: "INSERT INTO transactions (userId, type, amount, status) VALUES (?, ?, ?, 'pending')",
+      args: [req.user.id, "withdraw", amount],
+    });
+    res.json({ message: "Withdrawal request submitted" });
   } catch (err) {
-    res.status(500).json({ error: "Database error" });
+    console.error(err);
+    res.status(500).json({ message: "Withdrawal failed" });
+  }
+});
+
+// Get user transactions
+router.get("/history", authMiddleware, async (req, res) => {
+  try {
+    const result = await db.execute({
+      sql: "SELECT * FROM transactions WHERE userId = ? ORDER BY createdAt DESC",
+      args: [req.user.id],
+    });
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch history" });
   }
 });
 
